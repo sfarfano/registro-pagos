@@ -41,7 +41,8 @@ if usuario.strip().lower() == "soledad":
 if st.session_state.get("seccion") == "gastos_personales":
     st.title("🧾 Gastos Personales - Rendición Global")
     if os.path.exists(archivo_personal):
-        df_personal = pd.read_csv(archivo_personal)
+        df_personal = pd.read_csv(archivo_personal, dtype=str)
+        df_personal["Fecha"] = pd.to_datetime(df_personal["Fecha"], errors="coerce", format="%Y-%m-%d")
     else:
         df_personal = pd.DataFrame(columns=["Fecha", "Categoría", "Detalle", "Monto"])
 
@@ -60,6 +61,7 @@ if st.session_state.get("seccion") == "gastos_personales":
                 "Monto": monto
             }])
             df_personal = pd.concat([df_personal, nuevo], ignore_index=True)
+            df_personal["Fecha"] = pd.to_datetime(df_personal["Fecha"]).dt.strftime("%Y-%m-%d")
             df_personal.to_csv(archivo_personal, index=False)
             st.success("✅ Gasto registrado")
 
@@ -76,19 +78,26 @@ if st.session_state.get("seccion") == "gastos_personales":
 # --- Registro de pagos ---
 
 # Cargar datos de pagos existentes o crear archivo nuevo
+fecha_formato = "%Y-%m-%d"
 columnas_base = [
     "Fecha", "Proveedor", "Monto", "Medio de Pago",
     "Tipo de Pago", "Factura Asociada", "Concepto",
     "Archivo Respaldo", "Marcado por Responsable", "Marcado por Colaboradora", "Registrado por"
 ]
 if os.path.exists(archivo_csv):
-    df = pd.read_csv(archivo_csv)
+    df = pd.read_csv(archivo_csv, dtype=str)
+    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", format=fecha_formato)
     for col in columnas_base:
         if col not in df.columns:
             df[col] = ""
 else:
     df = pd.DataFrame(columns=columnas_base)
-    df.to_csv(archivo_csv, index=False)
+    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", format=fecha_formato)
+    df = pd.DataFrame(columns=columnas_base)
+df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", format=fecha_formato)
+    df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.strftime(fecha_formato)
+df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.strftime(fecha_formato)
+df.to_csv(archivo_csv, index=False)
 
 # Cargar listado de proveedores correctamente
 try:
@@ -103,6 +112,7 @@ if os.path.exists(archivo_tipos_pago):
     lista_tipos_pago = tipos_pago_df["Tipo"].dropna().unique().tolist()
 else:
     lista_tipos_pago = [
+        "Ajuste contable",
         "Factura", "Anticipo", "Compra menor", "Rendición", "Traspaso entre cuentas", "Préstamo recibido", "Otro"
     ]
     tipos_pago_df = pd.DataFrame({"Tipo": lista_tipos_pago})
@@ -112,12 +122,16 @@ st.title("📒 Registro de Pagos - CFC")
 
 # --- Formulario de ingreso ---
 with st.form("registro_form"):
+    mostrar_proveedor = True
     st.subheader("Registrar nuevo pago")
     fecha = st.date_input("Fecha del pago", value=datetime.date.today())
-    proveedor = st.text_input("Proveedor", placeholder="Escriba o seleccione un proveedor")
-    proveedor_sugerido = st.selectbox("Buscar proveedor en listado", [""] + lista_proveedores)
-    if proveedor_sugerido:
-        proveedor = proveedor_sugerido
+    if mostrar_proveedor:
+        proveedor = st.text_input("Proveedor", placeholder="Escriba o seleccione un proveedor")
+        proveedor_sugerido = st.selectbox("Buscar proveedor en listado", [""] + lista_proveedores)
+        if proveedor_sugerido:
+            proveedor = proveedor_sugerido
+    else:
+        proveedor = tipo_pago_sugerido
 
     monto = st.number_input("Monto", min_value=0.0, step=100.0, format="%0.0f")
     medio_pago = st.selectbox("Medio de pago", [
@@ -126,6 +140,8 @@ with st.form("registro_form"):
     ])
     tipo_pago = st.text_input("Tipo de pago", placeholder="Escriba o seleccione un tipo de pago")
     tipo_pago_sugerido = st.selectbox("Buscar tipo de pago en listado", [""] + lista_tipos_pago)
+    if tipo_pago_sugerido in ["Ajuste contable", "Traspaso entre cuentas", "Préstamo recibido"]:
+        mostrar_proveedor = False
     if tipo_pago_sugerido:
         tipo_pago = tipo_pago_sugerido
 
@@ -138,6 +154,16 @@ with st.form("registro_form"):
     enviar = st.form_submit_button("Guardar pago")
 
     if enviar:
+        if monto == 0:
+            st.warning("⚠️ El monto no puede ser cero. Por favor, ingresa un valor válido.")
+            st.stop()
+        if mostrar_proveedor and not proveedor.strip():
+            st.warning("⚠️ Debes ingresar o seleccionar un proveedor.")
+            st.stop()
+        if not tipo_pago.strip():
+            st.warning("⚠️ Debes ingresar o seleccionar un tipo de pago.")
+            st.stop()
+
         archivo_guardado = ""
         if archivo_respaldo:
             nombre_archivo = f"{fecha}_{proveedor}_{archivo_respaldo.name}"
@@ -191,6 +217,44 @@ filtro_proveedor = st.selectbox("Filtrar por proveedor", ["Todos"] + sorted(set(
 filtro_tipo_pago = st.selectbox("Filtrar por tipo de pago", ["Todos"] + sorted(set(df["Tipo de Pago"])))
 
 # --- Visualización de registros ---
+
+st.subheader("📊 Resumen de movimientos externos")
+if not df_externos.empty:
+    df_externos["Archivo Respaldo"] = df_externos["Archivo Respaldo"].apply(
+        lambda x: f"[Abrir]({x})" if pd.notna(x) and x != "" else ""
+    )
+    st.dataframe(
+        df_externos.style.applymap(lambda val: "background-color: #e8f5e9;", subset=["Tipo de Pago"])
+    )
+    st.download_button(
+        label="⬇️ Descargar movimientos externos",
+        data=df_externos.to_csv(index=False).encode('utf-8'),
+        file_name='movimientos_externos.csv',
+        mime='text/csv'
+    )
+else:
+    st.info("No hay movimientos externos registrados.")
+
+# Sección adicional para separar internos
+df_internos = df[df["Tipo de Pago"].isin(["Ajuste contable", "Traspaso entre cuentas", "Préstamo recibido"])]
+df_externos = df[~df["Tipo de Pago"].isin(["Ajuste contable", "Traspaso entre cuentas", "Préstamo recibido"])]
+
+st.subheader("📊 Resumen de movimientos internos")
+if not df_internos.empty:
+    df_internos["Archivo Respaldo"] = df_internos["Archivo Respaldo"].apply(
+        lambda x: f"[Abrir]({x})" if pd.notna(x) and x != "" else ""
+    )
+    st.dataframe(
+        df_internos.style.applymap(lambda val: "background-color: #fce4ec;", subset=["Tipo de Pago"])
+    )
+    st.download_button(
+        label="⬇️ Descargar movimientos internos",
+        data=df_internos.to_csv(index=False).encode('utf-8'),
+        file_name='movimientos_internos.csv',
+        mime='text/csv'
+    )
+else:
+    st.info("No hay movimientos internos registrados.")
 with st.expander("Ver listado de pagos"):
     if not df.empty:
         df_vista = df.copy()

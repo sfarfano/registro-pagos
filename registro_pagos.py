@@ -5,13 +5,68 @@ import os
 
 # Archivos de datos
 archivo_csv = "registro_pagos.csv"
-archivo_proveedores = "/mnt/data/Listado de Proveedores.xlsx"
+archivo_personal = "gastos_personales.csv"
+archivo_proveedores = "Listado de Proveedores.xlsx"
 archivo_tipos_pago = "tipos_pago.csv"
 carpeta_respaldo = "respaldos_pagos"
+usuarios_autorizados = ["soledad", "admin"]
 
 # Crear carpeta de respaldos si no existe
 if not os.path.exists(carpeta_respaldo):
     os.makedirs(carpeta_respaldo)
+
+# Inicio de sesión básico
+st.sidebar.title("🔐 Ingreso de usuario")
+usuario = st.sidebar.text_input("Nombre de usuario")
+es_admin = usuario.strip().lower() in usuarios_autorizados
+
+if not usuario:
+    st.warning("Por favor, escribe tu nombre de usuario para comenzar.")
+    st.stop()
+
+# --- Sección exclusiva para gastos personales ---
+if usuario.strip().lower() == "soledad":
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🧾 Registrar gastos personales"):
+        st.session_state.seccion = "gastos_personales"
+
+if st.session_state.get("seccion") == "gastos_personales":
+    st.title("🧾 Gastos Personales - Rendición Global")
+    if os.path.exists(archivo_personal):
+        df_personal = pd.read_csv(archivo_personal)
+    else:
+        df_personal = pd.DataFrame(columns=["Fecha", "Categoría", "Detalle", "Monto"])
+
+    with st.form("form_gasto_perso"):
+        fecha_p = st.date_input("Fecha del gasto", value=datetime.date.today())
+        categoria = st.selectbox("Categoría", ["Estacionamiento", "Colación", "Uber", "Pasajes", "Otro"])
+        detalle = st.text_input("Detalle o comentario")
+        monto = st.number_input("Monto ($)", min_value=0.0, step=100.0, format="%0.0f")
+        guardar_p = st.form_submit_button("Guardar gasto")
+
+        if guardar_p:
+            nuevo = pd.DataFrame.from_dict([{
+                "Fecha": fecha_p,
+                "Categoría": categoria,
+                "Detalle": detalle,
+                "Monto": monto
+            }])
+            df_personal = pd.concat([df_personal, nuevo], ignore_index=True)
+            df_personal.to_csv(archivo_personal, index=False)
+            st.success("✅ Gasto registrado")
+
+    st.subheader("📋 Listado de gastos personales")
+    st.dataframe(df_personal)
+    st.download_button(
+        label="📥 Descargar Excel de gastos personales",
+        data=df_personal.to_csv(index=False).encode('utf-8'),
+        file_name='gastos_personales.csv',
+        mime='text/csv'
+    )
+    st.stop()
+
+# Resto del código de la app (registro de pagos, filtros, edición y eliminación)
+# ... se conserva igual del archivo original anterior que ya habías cargado
 
 # Cargar datos de pagos existentes o crear archivo nuevo
 columnas_base = [

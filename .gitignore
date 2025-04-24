@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+registro_pagos.csv
+respaldos_pagos/

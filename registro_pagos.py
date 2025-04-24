@@ -25,6 +25,14 @@ if not usuario:
     st.stop()
 
 # --- Sección exclusiva para gastos personales ---
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Volver a panel principal"):
+    st.session_state.seccion = ""
+
+if st.sidebar.button("🚪 Cerrar sesión"):
+    st.session_state.clear()
+    st.rerun()
+
 if usuario.strip().lower() == "soledad":
     st.sidebar.markdown("---")
     if st.sidebar.button("🧾 Registrar gastos personales"):

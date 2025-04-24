@@ -65,14 +65,13 @@ if st.session_state.get("seccion") == "gastos_personales":
     )
     st.stop()
 
-# Resto del código de la app (registro de pagos, filtros, edición y eliminación)
-# ... se conserva igual del archivo original anterior que ya habías cargado
+# --- Registro de pagos ---
 
 # Cargar datos de pagos existentes o crear archivo nuevo
 columnas_base = [
     "Fecha", "Proveedor", "Monto", "Medio de Pago",
     "Tipo de Pago", "Factura Asociada", "Concepto",
-    "Archivo Respaldo", "Marcado por Responsable", "Marcado por Colaboradora"
+    "Archivo Respaldo", "Marcado por Responsable", "Marcado por Colaboradora", "Registrado por"
 ]
 if os.path.exists(archivo_csv):
     df = pd.read_csv(archivo_csv)
@@ -83,12 +82,11 @@ else:
     df = pd.DataFrame(columns=columnas_base)
     df.to_csv(archivo_csv, index=False)
 
-# Cargar listado de proveedores
+# Cargar listado de proveedores correctamente
 try:
-    df_proveedores = pd.read_excel(archivo_proveedores, skiprows=1)
-    lista_proveedores = df_proveedores["Unnamed: 2"].dropna().unique().tolist()
-except Exception as e:
-    df_proveedores = pd.DataFrame(columns=["Código", "Código Real", "Nombre", "Estado", "Saldo"])
+    df_proveedores = pd.read_excel(archivo_proveedores)
+    lista_proveedores = df_proveedores["Nombre"].dropna().unique().tolist() if "Nombre" in df_proveedores.columns else []
+except:
     lista_proveedores = []
 
 # Cargar tipos de pago existentes o crear archivo nuevo
@@ -150,11 +148,13 @@ with st.form("registro_form"):
             "Concepto": concepto,
             "Archivo Respaldo": archivo_guardado,
             "Marcado por Responsable": "Sí" if marcado_responsable else "",
-            "Marcado por Colaboradora": "Sí" if marcado_colaboradora else ""
+            "Marcado por Colaboradora": "Sí" if marcado_colaboradora else "",
+            "Registrado por": usuario
         }])
         df = pd.concat([df, nuevo], ignore_index=True)
         df.to_csv(archivo_csv, index=False)
         st.success("✅ Pago registrado correctamente")
+# ... se conserva igual del archivo original anterior que ya habías cargado
 
         if proveedor not in lista_proveedores:
             nuevo_proveedor = pd.DataFrame.from_dict([{
